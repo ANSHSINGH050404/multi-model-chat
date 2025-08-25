@@ -1,0 +1,79 @@
+services:
+  # Vite React Frontend Application
+  multimodel-chat-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    ports:
+      - "5173:5173"
+    environment:
+      - NODE_ENV=development
+      - VITE_HOST=0.0.0.0
+    volumes:
+      - .:/app
+      - /app/node_modules
+    stdin_open: true
+    tty: true
+    networks:
+      - chat-network
+    restart: unless-stopped
+
+  # Nginx Reverse Proxy (Optional - for production)
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - multimodel-chat-app
+    networks:
+      - chat-network
+    restart: unless-stopped
+    profiles:
+      - production
+
+  # Redis for caching (Optional - for future enhancements)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - chat-network
+    restart: unless-stopped
+    profiles:
+      - cache
+
+  # PostgreSQL Database (Optional - for storing chat history)
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=multimodel_chat
+      - POSTGRES_USER=chatuser
+      - POSTGRES_PASSWORD=chatpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - chat-network
+    restart: unless-stopped
+    profiles:
+      - database
+
+networks:
+  chat-network:
+    driver: bridge
+
+volumes:
+  redis_data:
+    driver: local
+  postgres_data:
+    driver: local
